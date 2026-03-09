@@ -170,9 +170,9 @@
     </section>
   </main>
   <script>
-    // On localhost use /api (Node proxy). On HTTPS (e.g. GitHub Pages) use CORS proxy to avoid mixed content.
+    // On localhost use /api (Node proxy). Otherwise use HTTPS API (no mixed content).
     const IS_LOCALHOST = /localhost|127\.0\.0\.1/.test(location.host);
-    const API_BASE = window.ROBOT_DASHBOARD_API || (IS_LOCALHOST ? '/api' : 'http://65.2.178.186:5174');
+    const API_BASE = window.ROBOT_DASHBOARD_API || (IS_LOCALHOST ? '/api' : 'https://server2.sudoyantra.com');
     const CORS_PROXY = 'https://corsproxy.io/?';
     const REFRESH_INTERVAL_MS = 10000;
     const ONLINE_THRESHOLD_MS = 120000; // 2 min = online

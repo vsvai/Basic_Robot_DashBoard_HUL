@@ -1,9 +1,10 @@
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
 const PORT = 3000;
-const ROBOT_API = 'http://65.2.178.186:5174';
+const ROBOT_API = 'https://server2.sudoyantra.com';
 
 function serveFile(filePath, res) {
   const ext = path.extname(filePath);
@@ -21,8 +22,10 @@ function serveFile(filePath, res) {
 
 function proxy(req, res, targetPath) {
   const url = new URL(targetPath, ROBOT_API);
-  const opts = { hostname: url.hostname, port: url.port || 80, path: url.pathname + url.search, method: req.method };
-  const proxyReq = http.request(opts, (proxyRes) => {
+  const isHttps = url.protocol === 'https:';
+  const client = isHttps ? https : http;
+  const opts = { hostname: url.hostname, port: url.port || (isHttps ? 443 : 80), path: url.pathname + url.search, method: req.method };
+  const proxyReq = client.request(opts, (proxyRes) => {
     res.writeHead(proxyRes.statusCode, proxyRes.headers);
     proxyRes.pipe(res);
   });
