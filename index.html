@@ -149,6 +149,17 @@
     }
     .error-state { color: var(--error); }
     .loading { opacity: 0.7; pointer-events: none; }
+    .api-status {
+      margin: 0.75rem 1rem;
+      padding: 0.5rem 0.6rem;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      word-break: break-all;
+    }
+    .api-status.error { color: var(--error); border-color: var(--error); }
   </style>
 </head>
 <body>
@@ -160,6 +171,7 @@
     <aside>
       <div class="robots-title">Robots</div>
       <div id="robot-list"></div>
+      <div id="api-status" class="api-status"></div>
     </aside>
     <section class="section">
       <div class="section-header">Latest logs (last 50) — <span id="selected-robot-label">Select a robot</span></div>
@@ -185,8 +197,8 @@
 
     function api(path) {
       const url = (API_BASE || '/api') + path;
-      // When page is HTTPS and API is HTTP, use CORS proxy to avoid mixed content block
-      if (location.protocol === 'https:' && url.startsWith('http://')) {
+      // Use CORS proxy when calling a different origin (not localhost proxy) so we can read the response (avoids 200-in-red / CORS block)
+      if (url.startsWith('http://') || url.startsWith('https://')) {
         return CORS_PROXY + encodeURIComponent(url);
       }
       return url;
@@ -204,12 +216,35 @@
       return t.split(/[\r\n]+/).map(s => s.trim()).filter(Boolean);
     }
 
+    function setStatus(msg, isError) {
+      const el = document.getElementById('api-status');
+      if (!el) return;
+      el.textContent = msg;
+      el.className = 'api-status' + (isError ? ' error' : '');
+    }
+
     async function fetchRobots() {
-      const res = await fetch(api('/macs'));
-      if (!res.ok) throw new Error('Failed to load robots');
-      const text = await res.text();
-      const list = parseMacsResponse(text);
-      return list.map(r => typeof r === 'string' ? r : (r.mac ?? r.id ?? r));
+      const url = api('/macs');
+      setStatus('Loading robots…');
+      try {
+        const res = await fetch(url);
+        const text = await res.text();
+        if (!res.ok) {
+          const preview = text.slice(0, 120).replace(/\s+/g, ' ');
+          setStatus(`Robots: ${res.status} ${res.statusText}. ${preview}`, true);
+          throw new Error(`Robots: ${res.status} ${res.statusText}`);
+        }
+        const list = parseMacsResponse(text);
+        const macs = list.map(r => typeof r === 'string' ? r : (r.mac ?? r.id ?? r)).filter(Boolean);
+        setStatus(macs.length ? `API: ${url}` : `API returned empty (check ${url})`, !macs.length);
+        return macs;
+      } catch (e) {
+        const msg = (e.name === 'TypeError' && /fetch|network|loaded/i.test(String(e.message)))
+          ? 'Network or CORS error — open DevTools (F12) → Network to see blocked request'
+          : (e.message || String(e));
+        setStatus('Robots: ' + msg, true);
+        throw e;
+      }
     }
 
     function parseJsonOrText(text) {
@@ -221,10 +256,16 @@
     }
 
     async function fetchLogs(mac) {
-      const res = await fetch(api('/view/' + encodeURIComponent(mac)));
-      if (!res.ok) throw new Error('Failed to load logs');
-      const text = await res.text();
-      return parseJsonOrText(text);
+      const url = api('/view/' + encodeURIComponent(mac));
+      try {
+        const res = await fetch(url);
+        const text = await res.text();
+        if (!res.ok) throw new Error(`Logs: ${res.status} ${res.statusText}`);
+        return parseJsonOrText(text);
+      } catch (e) {
+        setStatus('Logs: ' + (e.message || e), true);
+        throw e;
+      }
     }
 
     function renderRobotList() {
